@@ -1,2 +1,7 @@
 data
 hugging_face.py
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

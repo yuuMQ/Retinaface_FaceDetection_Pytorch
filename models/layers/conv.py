@@ -8,8 +8,6 @@ def _make_divisible(v, divisor=8):
         new_v += divisor
     return new_v
 
-
-
 class Conv2dNormActivation(nn.Sequential):
     '''
     Convolutional blocks: {

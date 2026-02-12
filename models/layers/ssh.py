@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from conv import Conv2dNormActivation
+from .conv import Conv2dNormActivation
 
 class SSH(nn.Module):
     '''

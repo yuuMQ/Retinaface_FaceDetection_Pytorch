@@ -93,19 +93,99 @@ def match(overlap_threshold, gt_boxes, prior_boxes, variances, gt_labels, landma
 
 
 def encode(matched, priors, variances):
-    pass
+    # calculate centers of ground truth boxes
+    g_cxcy = (matched[:, :2] + matched[:, 2:]) / 2 - priors[:, :2]
+
+    # Normalize the centers with the size of the priors and variances
+    g_cxcy /= (variances[0] * priors[:, 2:])
+
+    # Calculate the sizes of the ground truth boxes
+    g_wh = (matched[:, 2:] - matched[:, :2]) / priors[:, 2:]
+    g_wh = torch.log(g_wh) / variances[1] # Transform the scale with log
+
+    # Concatenate normalized centers and sizes to get the encoded boxes
+    encoded_boxes = torch.cat([g_cxcy, g_wh], dim=1) # Concatenation along the last dimension
+
+    return encoded_boxes # [num_priors, 4]
 
 def encode_landmarks(matched, priors, variances):
-    pass
+    # Reshape matched landmarks into 5 points with 2 coordinates each (x, y)
+    matched = matched.view(matched.size(0), 5, 2)
+
+    # Extract priors' center coordinates (cx, cy) with width, height (w, h)
+    priors_cx = priors[:, 0].view(-1, 1)
+    priors_cy = priors[:, 1].view(-1, 1)
+    priors_w = priors[:, 2].view(-1, 1)
+    priors_h = priors[:, 3].view(-1, 1)
+
+    # Compute the center offset between matched and prior landmarks
+    g_cxcy = matched - torch.stack([priors_cx, priors_cy], dim=2)
+
+    # Normalize by the variance-scaled width and height
+    g_cxcy /= variances[0] * torch.stack([priors_w, priors_h], dim=2)
+
+    # Flatten the landmark coordinates back to [num_priors, 10]
+    g_cxcy = g_cxcy.view(g_cxcy.size(0), -1)
+
+    return g_cxcy
+
 
 def decode(loc, priors, variances):
-    pass
+    # Compute centers of predicted boxes
+    cxcy = priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:]
+
+    # Compute widths and heights of predicted boxes
+    wh = priors[:, 2:] * torch.exp(loc[:, 2:] * variances[1])
+
+    # Convert center, size to corner coordinates
+    boxes = torch.empty_like(loc)
+    boxes[:, :2] = cxcy - wh / 2 # x_min, y_min
+    boxes[:, 2:] = cxcy + wh / 2 # x_max, y_max
+
+    return boxes
 
 def decode_landmarks(predictions, priors, variances):
-    pass
+    # Reshape predictions to [num_priors, 5, 2] to handle each pair (x, y) in a batch
+    predictions = predictions.view(predictions.size(0), 5, 2)
+
+    # Perform the same operation on all landmark pairs at once
+    landmarks = priors[:, :2].unsqueeze(1) + predictions * variances[0] * priors[:, 2:].unsqueeze(1)
+
+    # Flatten back to [num_priors, 10]
+    landmarks = landmarks.view(landmarks.size(0), -1)
+
+    return landmarks
+
 
 def log_sum_exp(x):
-    pass
+    return torch.logsumexp(x, dim=1, keepdim=True)
 
 def nms(dets, threshold):
-    pass
+    # dets: array of detections with each row: [x1, y1, x2, y2, score]
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = scores.argsort()[::-1]
+
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+
+        inds = np.where(ovr <= threshold)[0]
+        order = order[inds + 1]
+
+    return keep

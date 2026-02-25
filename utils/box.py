@@ -53,6 +53,15 @@ def matrix_iou(a, b):
 
     return area_i / np.maximum(area_a[:, np.newaxis], 1)
 
+def matrix_iof(a, b):
+    lt = np.maximum(a[:, np.newaxis, :2], b[:, :2])
+    rb = np.minimum(a[:, np.newaxis, 2:], b[:, 2:])
+
+    area_i = np.prod(rb - lt, axis=2) * (lt < rb).all(axis=2)
+    area_a = np.prod(a[:, 2:] - a[:, :2], axis=1)
+
+    return area_i / np.maximum(area_a[:, np.newaxis], 1)
+
 def match(overlap_threshold, gt_boxes, prior_boxes, variances, gt_labels, landmarks, loc_targets, conf_targets, landm_targets, batch_idx):
     # compute jaccard overlap between ground truth boxes and prior boxes
     overlaps = jaccard(gt_boxes, xywh2xyxy(prior_boxes))

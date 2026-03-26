@@ -30,7 +30,7 @@ class SSH(nn.Module):
         self.conv3X3 = Conv2dNormActivation(in_channel, out_channel // 2, kernel_size=3, activation_layer=None)
 
         # 5x5 Convolution branch
-        self.con5X5_1 = Conv2dNormActivation(in_channel, out_channel // 4, kernel_size=3, negative_slope=leaky)
+        self.conv5X5_1 = Conv2dNormActivation(in_channel, out_channel // 4, kernel_size=3, negative_slope=leaky)
         self.conv5X5_2 = Conv2dNormActivation(out_channel // 4, out_channel // 4, kernel_size=3, activation_layer=None)
 
         # 7x7 Convolution branch
@@ -40,7 +40,7 @@ class SSH(nn.Module):
     def forward(self, x):
         conv3X3 = self.conv3X3(x)
         conv5X5 = self.conv5X5_2(self.conv5X5_1(x))
-        conv7X7 = self.conv7X7_3(self.conv7X7_2(self.conv7X7_1(x)))
+        conv7X7 = self.conv7X7_3(self.conv7X7_2(self.conv5X5_1(x)))
 
         out = torch.cat([conv3X3, conv5X5, conv7X7], dim=1)
         out = F.relu(out, inplace=True)

@@ -1,6 +1,6 @@
-from layers.ssh import SSH
-from layers.fpn import FPN
-from heads import ClassHead, BboxHead, LandmarkHead
+from .layers.ssh import SSH
+from .layers.fpn import FPN
+from .heads import ClassHead, BboxHead, LandmarkHead
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,7 +26,7 @@ def build_backbone(name, pretrained=False):
 class RetinaFace(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        backbone = build_backbone(cfg['name'], cfg['pretrained'])
+        backbone = build_backbone(cfg['name'], cfg['pretrain'])
         self.fx = get_layer_extractor(cfg, backbone) # feature extraction
 
         num_anchors = 2

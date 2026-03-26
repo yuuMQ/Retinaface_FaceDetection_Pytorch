@@ -46,7 +46,7 @@ class WiderFaceDataset(Dataset):
             self.bounding_boxes.append(labels)
 
 
-    def __len_(self):
+    def __len__(self):
         return len(self.image_paths)
 
     def __getitem__(self, index):
@@ -65,9 +65,8 @@ class WiderFaceDataset(Dataset):
             # bbox (x1, x2, y1, y2)
             annotation[0, 0] = label[0] # x1
             annotation[0, 1] = label[1] # y1
-
-            annotation[0, 2] = annotation[0, 0] + label[2] # x1 + w -> x2
-            annotation[0, 3] = annotation[0, 1] + label[3] # y1 + h -> y2
+            annotation[0, 2] = label[0] + label[2] # x1 + w -> x2
+            annotation[0, 3] = label[1] + label[3] # y1 + h -> y2
 
             # Landmarks - With repo data format
             annotation[0, 4] = label[4]   # 10_x

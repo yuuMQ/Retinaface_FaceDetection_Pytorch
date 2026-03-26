@@ -3,7 +3,7 @@ import random
 import numpy as np
 from typing import Tuple
 
-from box import matrix_iof
+from .box import matrix_iof
 
 # CUSTOM DATA AUGMENTATION
 

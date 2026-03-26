@@ -1,4 +1,8 @@
 import os
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+import warnings
+warnings.filterwarnings("ignore")
+
 import time
 import random
 import numpy as np
@@ -19,12 +23,13 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import MultiStepLR
 
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 def parse_args():
     parser = ArgumentParser(description = 'Arguments For RetinaFace Training Process')
 
-    parser.add_argument('--train-data', type=str, default='data/widerface/train/', help='Train data path')
-    parser.add_argument('--backbone', type=str, default='resnet50', choices=['resnet34', 'resnet50'], help='Model backbone')
+    parser.add_argument('--train-data', type=str, default='data/widerface', help='Train data path')
+    parser.add_argument('--backbone', type=str, default='resnet34', choices=['resnet34', 'resnet50'], help='Model backbone')
     parser.add_argument('--num-workers', type=int, default=8, help='Num workers')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
 
@@ -42,7 +47,8 @@ def parse_args():
     parser.add_argument('--gamma', type=float, default=0.1, help='Gamma update for SGD')
 
     parser.add_argument('--save-dir', type=str, default='checkpoint', help='Save directory')
-    parser.add_argument('--checkpoint', type=str, default=None, action='store_true', help='Resume training from last checkpoint')
+    parser.add_argument('--checkpoint', type=str, default=None, help='Resume training from last checkpoint')
+    parser.add_argument('--tensorboard', type=str, default='tensorboard', help='Tensorboard')
 
     args = parser.parse_args()
     return args
@@ -56,14 +62,14 @@ def random_seed(seed=42):
     random.seed(seed)
 
 
-def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, print_freq=10, scaler=None, writer=None):
+def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, print_freq=1, scaler=None, writer=None):
     model.train()
     batch_loss = []
     loc_losses = []
     conf_losses = []
     land_losses = []
-
-    for batch_idx, (images, targets) in enumerate(data_loader):
+    progress_bar = tqdm(data_loader, colour='green', total=len(data_loader), dynamic_ncols=True, desc=f"Epoch {epoch+1}/{cfg['epochs']}")
+    for batch_idx, (images, targets) in enumerate(progress_bar):
         start_time = time.time()
 
         images = images.to(device)
@@ -83,14 +89,34 @@ def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, pri
             loss.backward()
             optimizer.step()
 
+        # GLOBAL STEP
+        global_step = epoch * len(data_loader) + batch_idx
+
+        lr = optimizer.param_groups[0]['lr']
+        # TENSORBOARD BATCH LOG
+        if writer is not None:
+            writer.add_scalar("Loss_batch/total", loss.item(), global_step)
+            writer.add_scalar("Loss_batch/localization", loss_loc.item(), global_step)
+            writer.add_scalar("Loss_batch/confidence", loss_conf.item(), global_step)
+            writer.add_scalar("Loss_batch/landmarks", loss_land.item(), global_step)
+            writer.add_scalar('Learning Rate', lr, global_step)
+
         if (batch_idx + 1) % print_freq == 0:
+            # lr = optimizer.param_groups[0]['lr']
+            # print(
+            #     f"Epoch: {epoch + 1}/{cfg['epochs']} | Batch: {batch_idx + 1}/{len(data_loader)} | "
+            #     f"Loss Localization : {loss_loc.item():.4f} | Classification: {loss_conf.item():.4f} | "
+            #     f"Landmarks: {loss_land.item():.4f} | "
+            #     f"LR: {lr:.8f} | Time: {(time.time() - start_time):.4f} s"
+            # )
             lr = optimizer.param_groups[0]['lr']
-            print(
-                f"Epoch: {epoch + 1}/{cfg['epochs']} | Batch: {batch_idx + 1}/{len(data_loader)} | "
-                f"Loss Localization : {loss_loc.item():.4f} | Classification: {loss_conf.item():.4f} | "
-                f"Landmarks: {loss_land.item():.4f} | "
-                f"LR: {lr:.8f} | Time: {(time.time() - start_time):.4f} s"
-            )
+            progress_bar.set_postfix({
+                "loc": f"{loss_loc.item():.4f}",
+                "conf": f"{loss_conf.item():.4f}",
+                "land": f"{loss_land.item():.4f}",
+                "lr": f"{lr:.6f}",
+                "time": f"{(time.time() - start_time):.3f}s"
+            })
 
         batch_loss.append(loss.item())
         loc_losses.append(loss_loc.item())
@@ -116,7 +142,7 @@ def main(args):
     # Create checkpoint directory
     os.makedirs(args.save_dir, exist_ok=True)
 
-    writer = SummaryWriter(log_dir=args.save_dir)
+    writer = SummaryWriter(log_dir=args.tensorboard)
 
     train_augmentation = Augmentation(cfg['image_size'], rgb_mean)
     train_dataset = WiderFaceDataset(args.train_data, train=True, transform=train_augmentation)
@@ -157,7 +183,7 @@ def main(args):
 
     print("TRAINING!!!")
     for epoch in range(start_epoch, cfg['epochs']):
-        train_one_epoch(model, criterion, optimizer, train_dataloader, epoch, device, args.print_freq, scaler=None)
+        train_one_epoch(model, criterion, optimizer, train_dataloader, epoch, device, args.print_freq, scaler=None, writer=writer)
         ckpt = {
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
@@ -167,7 +193,7 @@ def main(args):
         lr_scheduler.step()
 
         torch.save(ckpt, f'{args.save_dir}/{args.backbone}_checkpoint.ckpt')
-        torch.save(model.state_dict(), f'{args.save_dir}/{args.backbone}_checkpoint.ckpt')
+        torch.save(model.state_dict(), f'{args.save_dir}/{args.backbone}_last.ckpt')
 
     # Final model
     state = model.state_dict()

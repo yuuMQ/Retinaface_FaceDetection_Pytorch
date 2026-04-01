@@ -69,16 +69,16 @@ class WiderFaceDataset(Dataset):
             annotation[0, 3] = label[1] + label[3] # y1 + h -> y2
 
             # Landmarks - With repo data format
-            annotation[0, 4] = label[4]   # 10_x
-            annotation[0, 5] = label[5]   # 10_y
-            annotation[0, 6] = label[7]   # 11_x
-            annotation[0, 7] = label[8]   # 11_y
-            annotation[0, 8] = label[10]   # 12_x
-            annotation[0, 9] = label[11]   # 12_y
-            annotation[0, 10] = label[13] # 13_x
-            annotation[0, 11] = label[14] # 13_y
-            annotation[0, 12] = label[16] # 14_x
-            annotation[0, 13] = label[17] # 14_y
+            annotation[0, 4] = label[4]   # l0_x
+            annotation[0, 5] = label[5]   # l0_y
+            annotation[0, 6] = label[7]   # l1_x
+            annotation[0, 7] = label[8]   # l1_y
+            annotation[0, 8] = label[10]   # l2_x
+            annotation[0, 9] = label[11]   # l2_y
+            annotation[0, 10] = label[13] # l3_x
+            annotation[0, 11] = label[14] # l3_y
+            annotation[0, 12] = label[16] # l4_x
+            annotation[0, 13] = label[17] # l4_y
 
             if label[4] >= 0:
                 annotation[0, 14] = 1

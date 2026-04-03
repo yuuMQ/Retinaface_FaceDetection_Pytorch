@@ -62,7 +62,7 @@ def random_seed(seed=42):
     random.seed(seed)
 
 
-def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, print_freq=1, scaler=None, writer=None):
+def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, print_freq=1, scaler=None, writer=None, global_step=0):
     model.train()
     batch_loss = []
 
@@ -87,7 +87,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, pri
             optimizer.step()
 
         # GLOBAL STEP
-        global_step = epoch * len(data_loader) + batch_idx
+        global_step += 1
 
         lr = optimizer.param_groups[0]['lr']
         # TENSORBOARD
@@ -109,6 +109,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, pri
         batch_loss.append(loss.item())
     print(f"Average batch loss: {np.mean(batch_loss):.7f}")
 
+    return global_step
 
 def main(args):
     random_seed()
@@ -116,8 +117,6 @@ def main(args):
 
     # Create checkpoint directory
     os.makedirs(args.save_dir, exist_ok=True)
-
-    writer = SummaryWriter(log_dir=args.tensorboard)
 
     train_augmentation = Augmentation(cfg['image_size'], rgb_mean)
     train_dataset = WiderFaceDataset(args.train_data, train=True, transform=train_augmentation)
@@ -147,23 +146,28 @@ def main(args):
     optimizer = SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     lr_scheduler = MultiStepLR(optimizer, milestones=cfg['milestones'], gamma=args.gamma)
 
+    global_step = 0
     start_epoch = 0
+
     if args.checkpoint:
         checkpoint = torch.load(f'{args.checkpoint}/{args.backbone}_checkpoint.ckpt', map_location='cpu', weights_only=True)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         start_epoch = checkpoint['epoch'] + 1
+        global_step = checkpoint.get('global_step', 0)
         print(f"Successfully load {args.checkpoint}/{args.backbone}_checkpoint.ckpt")
 
+    writer = SummaryWriter(log_dir=args.tensorboard, purge_step=global_step)
     print("TRAINING!!!")
     for epoch in range(start_epoch, cfg['epochs']):
-        train_one_epoch(model, criterion, optimizer, train_dataloader, epoch, device, args.print_freq, scaler=None, writer=writer)
+        global_step = train_one_epoch(model, criterion, optimizer, train_dataloader, epoch, device, args.print_freq, scaler=None, writer=writer, global_step=global_step)
         ckpt = {
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "lr_scheduler": lr_scheduler.state_dict(),
             "epoch": epoch,
+            "global_step": global_step
         }
         lr_scheduler.step()
 

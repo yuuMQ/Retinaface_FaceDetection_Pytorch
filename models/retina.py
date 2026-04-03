@@ -27,24 +27,24 @@ def build_backbone(name, pretrained=False):
 class RetinaFace(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        # backbone = build_backbone(cfg['name'], cfg['pretrain'])
-        # self.fx = get_layer_extractor(cfg, backbone) # feature extraction
+        backbone = build_backbone(cfg['name'], cfg['pretrain'])
+        self.fx = get_layer_extractor(cfg, backbone) # feature extraction
 
-        self.fx = SwinV2Backbone(
-            model_name=cfg.get('name', 'swin_small_patch4_window7_224'),
-            pretrained=cfg.get('pretrain', True),
-        )
-        fpn_in_channels = self.fx.out_channels
-
+        # self.fx = SwinV2Backbone(
+        #     model_name=cfg.get('name', 'swin_small_patch4_window7_224'),
+        #     pretrained=cfg.get('pretrain', True),
+        # )
+        # fpn_in_channels = self.fx.out_channels
+        #
         num_anchors = 2
         out_channels = cfg['out_channel']
 
-        # base_in_channels = cfg['in_channel']
-        # fpn_in_channels = [
-        #     base_in_channels * 2,
-        #     base_in_channels * 4,
-        #     base_in_channels * 8,
-        # ]
+        base_in_channels = cfg['in_channel']
+        fpn_in_channels = [
+            base_in_channels * 2,
+            base_in_channels * 4,
+            base_in_channels * 8,
+        ]
 
         # self.fpn = FPN(fpn_in_channels, out_channels)
         self.fpn = FEFPN(fpn_in_channels, out_channels)

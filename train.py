@@ -29,14 +29,14 @@ def parse_args():
     parser = ArgumentParser(description = 'Arguments For RetinaFace Training Process')
 
     parser.add_argument('--train-data', type=str, default='data/widerface', help='Train data path')
-    parser.add_argument('--backbone', type=str, default='resnet34', choices=['resnet34', 'resnet50'], help='Model backbone')
+    parser.add_argument('--backbone', type=str, default='swinv2_cr_tiny', choices=['resnet34', 'resnet50', 'swinv2_cr_tiny', 'swinv2_cr_small', 'swinv2_base', 'swinv2_base_22k'], help='Model backbone')
     parser.add_argument('--num-workers', type=int, default=8, help='Num workers')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
 
     # Training
-    parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
+    parser.add_argument('--batch-size', type=int, default=8, help='Batch size')
     parser.add_argument('--num-classes', type=int, default=2, help='Number of classes')
-    parser.add_argument('--print-freq', type=int, default=10, help='Print frequency during training')
+    parser.add_argument('--print-freq', type=int, default=1, help='Print frequency during training')
 
     # Optimizer and scheduler
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
@@ -65,11 +65,8 @@ def random_seed(seed=42):
 def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, print_freq=1, scaler=None, writer=None):
     model.train()
     batch_loss = []
-    loc_losses = []
-    conf_losses = []
-    land_losses = []
-    progress_bar = tqdm(data_loader, colour='green', total=len(data_loader), dynamic_ncols=True, desc=f"Epoch {epoch+1}/{cfg['epochs']}")
-    for batch_idx, (images, targets) in enumerate(progress_bar):
+
+    for batch_idx, (images, targets) in enumerate(data_loader):
         start_time = time.time()
 
         images = images.to(device)
@@ -93,7 +90,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, pri
         global_step = epoch * len(data_loader) + batch_idx
 
         lr = optimizer.param_groups[0]['lr']
-        # TENSORBOARD BATCH LOG
+        # TENSORBOARD
         if writer is not None:
             writer.add_scalar("Loss_batch/total", loss.item(), global_step)
             writer.add_scalar("Loss_batch/localization", loss_loc.item(), global_step)
@@ -102,38 +99,16 @@ def train_one_epoch(model, criterion, optimizer, data_loader, epoch, device, pri
             writer.add_scalar('Learning Rate', lr, global_step)
 
         if (batch_idx + 1) % print_freq == 0:
-            # lr = optimizer.param_groups[0]['lr']
-            # print(
-            #     f"Epoch: {epoch + 1}/{cfg['epochs']} | Batch: {batch_idx + 1}/{len(data_loader)} | "
-            #     f"Loss Localization : {loss_loc.item():.4f} | Classification: {loss_conf.item():.4f} | "
-            #     f"Landmarks: {loss_land.item():.4f} | "
-            #     f"LR: {lr:.8f} | Time: {(time.time() - start_time):.4f} s"
-            # )
-            lr = optimizer.param_groups[0]['lr']
-            progress_bar.set_postfix({
-                "loc": f"{loss_loc.item():.4f}",
-                "conf": f"{loss_conf.item():.4f}",
-                "land": f"{loss_land.item():.4f}",
-                "lr": f"{lr:.6f}",
-                "time": f"{(time.time() - start_time):.3f}s"
-            })
-
+            lr = optimizer.param_groups[0]["lr"]
+            print(
+                f"Epoch: {epoch + 1}/{cfg['epochs']} | Batch: {batch_idx + 1}/{len(data_loader)} | "
+                f"Loss Localization : {loss_loc.item():.4f} | Classification: {loss_conf.item():.4f} | "
+                f"Landmarks: {loss_land.item():.4f} | "
+                f"LR: {lr:.8f} | Time: {(time.time() - start_time):.4f} s"
+            )
         batch_loss.append(loss.item())
-        loc_losses.append(loss_loc.item())
-        conf_losses.append(loss_conf.item())
-        land_losses.append(loss_land.item())
+    print(f"Average batch loss: {np.mean(batch_loss):.7f}")
 
-    avg_loss = np.mean(batch_loss)
-    avg_loc_loss = np.mean(loc_losses)
-    avg_conf_loss = np.mean(conf_losses)
-    avg_land = np.mean(land_losses)
-
-    print(f"Average batch loss: {avg_loss:.7f}")
-    if writer is not None:
-        writer.add_scalar("Loss_epoch/total", avg_loss, epoch)
-        writer.add_scalar("Loss_epoch/localization", avg_loc_loss, epoch)
-        writer.add_scalar("Loss_epoch/confidence", avg_conf_loss, epoch)
-        writer.add_scalar("Loss_epoch/landmarks", avg_land, epoch)
 
 def main(args):
     random_seed()
